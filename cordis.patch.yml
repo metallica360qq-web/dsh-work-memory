@@ -1,0 +1,8 @@
+# dsh-work-memory — bundle patch layer.
+#
+# 本包是 bundle 形态：dsh-app-boot 会按 profile 的 dsh.profile.bundles 顺序
+# 堆叠每个 bundle 的 dsh.bundle.patch，所以这一行在重启后进入插件树。
+# 卸载包即自动摘除，不会在 cordis.patch.yml 里留下手工 insert 行。
+- insert:
+    - id: work-memory
+      name: 'dsh-work-memory'

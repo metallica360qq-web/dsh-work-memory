@@ -1,0 +1,11 @@
+# 个人/过程数据，永不发布
+seed/
+rebuilt*.jsonl
+scan-sessions.json
+ingest-*.jsonl
+eval-set.json
+eval-candidates.txt
+autopilot.log
+*.bak-*
+# 运行产物
+node_modules/ROADMAP.md

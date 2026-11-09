@@ -1,0 +1,7 @@
+{
+  "meta": {
+    "title": "Work memory",
+    "description": "Conversation-level work index that recalls the original spans context compaction discarded.",
+    "detail": "docs/DETAIL.md"
+  }
+}

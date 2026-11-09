@@ -1,0 +1,53 @@
+{
+  "name": "dsh-work-memory",
+  "version": "0.1.0",
+  "private": true,
+  "description": "对话级工作记忆索引：记住用户提过的需求与产物路径，命中后按 session/seq 回放被上下文压缩的原文。",
+  "type": "module",
+  "main": "lib/index.js",
+  "icon": "./icon.svg",
+  "exports": {
+    ".": {
+      "default": "./lib/index.js"
+    },
+    "./package.json": {
+      "default": "./package.json"
+    },
+    "./locale/*.json": "./locale/*.json"
+  },
+  "files": [
+    "lib/",
+    "cli/",
+    "locale/*.json",
+    "docs",
+    "icon.svg",
+    "cordis.patch.yml",
+    "topics.example.json",
+    "README.md"
+  ],
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "catalog": {
+      "category": "memory",
+      "summary": {
+        "zh": "对话级工作记忆索引：把用户提过的需求、产物路径与 session/seq 指针存成钩子；命中后按 seq 回放当时被压缩的原文。不总结对话、不调模型、纯本地。",
+        "en": "Conversation-level work memory: index each user request with its artifact paths and a session/seq pointer, then replay the compacted original span on demand. No summarisation, no model calls, local only."
+      },
+      "capabilities": [
+        "compaction-survival",
+        "seq-recall",
+        "artifact-index",
+        "model-tools"
+      ]
+    }
+  },
+  "peerDependencies": {
+    "@deepseek-ai/cordis": ">=4.0.1 <5"
+  },
+  "engines": {
+    "node": "^22.19.0 || >=24.0.0"
+  },
+  "license": "MIT"
+}
