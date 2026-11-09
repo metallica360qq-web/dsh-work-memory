@@ -168,6 +168,8 @@ node cli/eval.js --top 10 --show-fail 20
 
 ## 自测清单
 
+这些脚本都依赖**本机的账本和会话日志**。刚 clone 下来直接跑会失败——先执行一次 `cli/bootstrap.js` 把账本建起来。
+
 ```bash
 node cli/selftest.js         # 工具注册 / 自动捕获 / 上下文注入（mock ctx）
 node cli/test-governance.js  # 时间衰减 / superseded / 不删除 / 同分排序
