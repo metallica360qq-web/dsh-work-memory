@@ -1,11 +1,18 @@
 {
   "name": "dsh-work-memory",
   "version": "0.1.0",
-  "private": true,
   "description": "对话级工作记忆索引：记住用户提过的需求与产物路径，命中后按 session/seq 回放被上下文压缩的原文。",
   "type": "module",
   "main": "lib/index.js",
   "icon": "./icon.svg",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/metallica360qq-web/dsh-work-memory.git"
+  },
+  "homepage": "https://github.com/metallica360qq-web/dsh-work-memory#readme",
+  "bugs": {
+    "url": "https://github.com/metallica360qq-web/dsh-work-memory/issues"
+  },
   "exports": {
     ".": {
       "default": "./lib/index.js"
