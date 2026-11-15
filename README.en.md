@@ -6,6 +6,8 @@ It remembers *what you asked for, in which session, and what it produced*, and r
 
 Since v0.2 it also builds a **topic system out of your own history**: 12 broad areas and 81 fine lines, each with an editable annotation. New conversations are classified by *segment*, and recall walks the label tree level by level instead of matching words.
 
+![architecture](docs/architecture.svg)
+
 ## What it does now
 
 | Layer | Job | Data |
