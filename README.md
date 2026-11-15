@@ -95,8 +95,21 @@ node cli/annotate-topics.mjs
 |---|---|
 | `memory_search(query, limit?)` | 检索钩子：标题 + 当时的需求 + 产物路径 + 时间 |
 | `memory_open(id, query?, maxChars?)` | 按 seq 回放原文 |
+| `memory_brief(topic, limit?)` | 某条线的**记忆卡大纲**：每段一行（做了什么 / 结论 / 未完成 / 产物），动手前先扫一遍 |
 | `memory_write(title, ask?, artifacts?, supersedes?)` | 手动补一条，或标记取代关系 |
 | `memory_map(topic/session/recent/limit/includeAgents)` | 按主题/会话浏览：先总览、再主题、再会话、最后 `memory_open` |
+
+## 记忆卡与三级注入
+
+复杂知识不是靠「多给几行标题」进上下文的。现在的注入分三级：
+
+| 级别 | 内容 | 什么时候 |
+|---|---|---|
+| L0 方向 | 一句话「你在哪条线，这条线最近做到哪」 | 面板选定了「当前方向」 |
+| L1 卡片 | 每段一张卡：做了什么、结论/决定、未完成、产物 | 注入按卡片给（最多 6 段），`memory_brief` 可看全貌 |
+| L2 原文 | 按 seq 回放当时那段对话 | 需要细节时 `memory_open` |
+
+卡片由 `cli/build-cards.mjs` 生成（一段一次调用），存在 `cards.jsonl`；召回时优先注入卡片而不是裸标题。
 
 ## 实测与已知问题
 
