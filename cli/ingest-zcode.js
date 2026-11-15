@@ -67,6 +67,8 @@ for (const s of sessions) {
     kw: topKeywords(events.map((e) => e.text), 20),
     kind: 'auto',
     level: 'turn',
+    // 来源分类：interactive 才是人开的会话；subagent_child / workflow_child 是编排器派的任务
+    origin: 'zcode:' + String(s.task_type || 'unknown'),
     artifacts: [],
     ts: new Date(Number(s.time_created) || Date.now()).toISOString(),
     agent: 'zcode',

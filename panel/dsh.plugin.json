@@ -1,0 +1,12 @@
+{
+  "name": "session-view-plugin",
+  "description": "会话视图插件：侧栏图标打开全屏面板——图谱（主题方块 → 径向星图：主题·会话·钩子，跨来源同圈）、会话列表（带记忆徽章）、产物索引；Host 半只读工作记忆账本",
+  "version": "1.2.0",
+  "entry": {
+    "name": "session-view-plugin",
+    "inject": ["webServer"]
+  },
+  "client": {
+    "platform": "web"
+  }
+}

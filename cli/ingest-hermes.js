@@ -60,6 +60,8 @@ for (const s of sessions) {
     kw: topKeywords(events.map((e) => e.text), 20),
     kind: isCron ? 'cron' : 'auto',
     level: isCron ? 'turn' : 'turn',
+    // 来源分类：cron / subagent 都是机器产生的，desktop / tui / cli / acp 才是人
+    origin: 'hermes:' + (source.length > 0 ? source : 'unknown'),
     artifacts: [],
     ts: new Date(
       (() => {

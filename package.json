@@ -1,7 +1,16 @@
 {
   "name": "dsh-work-memory",
-  "version": "0.1.0",
-  "description": "对话级工作记忆索引：记住用户提过的需求与产物路径，命中后按 session/seq 回放被上下文压缩的原文。",
+  "version": "0.2.0",
+  "description": "跨对话的长期工作记忆：按两遍读归纳出两层主题（宽类+细类，带可编辑评述），把对话切成段作为归类单元，召回按「标签→子标签→单元」逐级判断；同时保留 session/seq 原文回放。",
+  "keywords": [
+    "dsh",
+    "plugin",
+    "memory",
+    "work-memory",
+    "topic-induction",
+    "segments",
+    "recall"
+  ],
   "type": "module",
   "main": "lib/index.js",
   "icon": "./icon.svg",
@@ -39,13 +48,17 @@
     "catalog": {
       "category": "memory",
       "summary": {
-        "zh": "对话级工作记忆索引：把用户提过的需求、产物路径与 session/seq 指针存成钩子；命中后按 seq 回放当时被压缩的原文。不总结对话、不调模型、纯本地。",
-        "en": "Conversation-level work memory: index each user request with its artifact paths and a session/seq pointer, then replay the compacted original span on demand. No summarisation, no model calls, local only."
+        "zh": "跨对话的长期工作记忆：两遍读归纳出两层主题（12 宽类 + 81 细类，带可编辑评述），对话切段后按段归类，召回按标签逐级往下判断；原文按 session/seq 回放。",
+        "en": "Cross-conversation work memory: two-pass topic induction (12 broad + fine labels with editable annotations), segment-level classification, hierarchical recall; original spans replayed by session/seq."
       },
       "capabilities": [
         "compaction-survival",
         "seq-recall",
         "artifact-index",
+        "topic-induction",
+        "segment-classification",
+        "hierarchical-recall",
+        "provenance-filter",
         "model-tools"
       ]
     }

@@ -161,6 +161,26 @@ mods.forEach((m, i) => {
 const existing = existsSync(ledger)
   ? readFileSync(ledger, 'utf8').split('\n').filter(Boolean).map((l) => JSON.parse(l))
   : []
+
+// 重建出来的模块行要继承原来那些轮次行的主题/来源，否则每小时自动重建一次
+// 就会把已经归好的记忆洗回未打标（2026-11-15 发现的定时任务漏洞）。
+for (const row of newRows) {
+  row.origin = 'dsh:user'
+  const covered = existing.filter(
+    (r) => r.session === sessionId && Number(r.startSeq) >= row.startSeq && Number(r.startSeq) < row.endSeq && r.topic,
+  )
+  if (covered.length === 0) continue
+  const tally = new Map()
+  for (const r of covered) {
+    const key = String(r.topicFine || '') + '|' + String(r.topic || '')
+    tally.set(key, (tally.get(key) || 0) + 1)
+  }
+  const best = [...tally.entries()].sort((left, right) => right[1] - left[1])[0]
+  if (best === undefined) continue
+  const [fine, broad] = best[0].split('|')
+  if (broad !== '') row.topic = broad
+  if (fine !== '') row.topicFine = fine
+}
 const isThisSessionModule = (r) => r.session === sessionId && r.level === 'module'
 const kept = existing.filter((r) => !isThisSessionModule(r) && (keepTurn || !(r.session === sessionId && r.level === 'turn')))
 const byId = new Map()
