@@ -14,6 +14,7 @@ import { loadHooks } from '../lib/store.js'
 import { isHumanRow } from '../lib/origin.js'
 import { isBoilerplate } from '../lib/browse.js'
 import { loadSegmentMap } from '../lib/units.js'
+import { loadLinks, neighbors, linksFile } from '../lib/links.js'
 import { dshHome } from '../lib/sessionlog.js'
 import { callLlmWithRetry } from './_llm.js'
 
@@ -130,10 +131,23 @@ async function hier(query) {
   return finishLevel3(query, steps, picks2)
 }
 
-/** 第三层：在选定细类的单元里挑。 */
+/** 第三层：在选定细类的单元里挑；候选集顺带扩到相关主题（一跳邻居）。 */
 async function finishLevel3(query, steps, pickedFines) {
+  const links = loadLinks(linksFile(join(dshHome(), 'work-memory')))
+  const expanded = []
+  for (const fine of pickedFines) expanded.push(fine)
+  for (const fine of pickedFines) {
+    for (const nb of neighbors(links, fine.id)) {
+      if (nb.weight < 0.6) continue
+      const related = table.fine.find((item) => item.id === nb.node)
+      if (related !== undefined && !expanded.some((item) => item.id === related.id)) expanded.push(related)
+    }
+  }
+  if (expanded.length > pickedFines.length) {
+    steps.push({ level: 3, chars: 0, elapsed: 0, picked: ['(候选扩到相关：' + (expanded.length - pickedFines.length) + ' 条)'] })
+  }
   const units = []
-  for (const fine of pickedFines) for (const unit of unitsOf(fine.id)) units.push(unit)
+  for (const fine of expanded) for (const unit of unitsOf(fine.id)) units.push(unit)
   const level3 = units.map((unit, index) => (index + 1) + '. ' + unit.date + ' ｜ ' + unit.label + (unit.hooks > 1 ? '（' + unit.hooks + ' 条）' : '')).join('\n')
   const step3 = await ask([
     '下面是候选历史工作单元（编号. 日期 ｜ 这段在做什么）。请判断这个新提问跟哪几个真正相关。',
