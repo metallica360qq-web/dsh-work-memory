@@ -1,4 +1,4 @@
-/**
+﻿/**
  * 会话视图插件的离线渲染自检（两遍归纳后的两层结构）。
  *
  * 用法：node scripts/render-test.mjs
@@ -257,6 +257,27 @@ const topicPosts = posted.filter((item) => item.url.startsWith('/session-view/ap
 assert.equal(topicPosts.length, 1)
 assert.equal(topicPosts[0].body.name, '星图交互改版')
 assert.equal(topicPosts[0].body.group, 'g05')
+
+// 1e. 全库图谱：宽类 + 细线都画成节点，连接画成线；点细线节点进入它
+const wholeButton = collect(tree, []).find((element) => element.type === 'button' && text(element).trim() === '全库图谱')
+assert.ok(wholeButton !== undefined, '总览有「全库图谱」入口')
+click(wholeButton)
+tree = await settle()
+body = text(tree)
+assert.match(body, /全库图谱/)
+const wholeNodes = pick(tree, 'svp-whole-node')
+assert.equal(wholeNodes.length, 8, '3 个宽类 + 5 条细线')
+const edgeLines = collect(tree, []).filter((element) => element.type === 'line')
+assert.ok(edgeLines.length >= 2, '至少画出连接线')
+const i02Node = wholeNodes.find((node) => text(node).includes('zcode 插件笔记'))
+click(i02Node)
+tree = await settle()
+body = text(tree)
+assert.match(body, /zcode 插件笔记/, '点细线节点进入该细线')
+// 回到总览继续后面的用例
+const backButton = collect(tree, []).find((element) => element.type === 'button' && text(element).includes('全部主题'))
+click(backButton)
+tree = await settle()
 
 // 2. 进宽类：细线清单
 click(tiles.find((tile) => text(tile).includes('DSH桌面应用与插件生态')))

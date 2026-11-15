@@ -220,6 +220,11 @@ window.__ModuleLoader__.load({
       ".svp-link-wrap{display:inline-flex;align-items:center;gap:2px;}",
       ".svp-link-x{border:none;background:transparent;color:var(--dsw-alias-label-secondary);cursor:pointer;font-size:11px;padding:0 2px;}",
       ".svp-links-empty{font-size:11.5px;color:var(--dsw-alias-label-secondary);}",
+      ".svp-btn-inline{margin-left:8px;height:24px;padding:0 10px;font-size:11.5px;}",
+      ".svp-whole-node{cursor:pointer;}",
+      ".svp-whole-node circle{stroke:var(--dsw-alias-bg-base);stroke-width:1.2;}",
+      ".svp-whole-label{font-size:11px;fill:var(--dsw-alias-label-primary);pointer-events:none;}",
+      ".svp-whole-label-broad{font-size:12.5px;font-weight:600;fill:var(--dsw-alias-label-primary);pointer-events:none;}",
       ".svp-file-count{flex:none;font-size:11px;color:var(--dsw-alias-label-secondary);}",
       "@media (max-width:820px){.svp-search{width:180px;max-width:40vw;}.svp-group-path{display:none;}}",
     ].join("");
@@ -865,6 +870,12 @@ window.__ModuleLoader__.load({
       var linkTargetState = React.useState("");
       var linkTarget = linkTargetState[0];
       var setLinkTarget = linkTargetState[1];
+      var wholeState = React.useState(false);
+      var wholeGraph = wholeState[0];
+      var setWholeGraph = wholeState[1];
+      var hoverState = React.useState("");
+      var hoverNode = hoverState[0];
+      var setHoverNode = hoverState[1];
       var topicState = React.useState("");
       var graphTopic = topicState[0];
       var setGraphTopic = topicState[1];
@@ -1577,7 +1588,12 @@ window.__ModuleLoader__.load({
               h(
                 "div",
                 { className: "svp-note" },
-                "点主题方块看它下面的会话。色条是来源占比（同一主题下各 agent 混在一起，不分开）。"
+                "点主题方块看它下面的会话。色条是来源占比（同一主题下各 agent 混在一起，不分开）。",
+                h("button", {
+                  type: "button",
+                  className: "svp-btn svp-btn-inline",
+                  onClick: function () { setWholeGraph(true); },
+                }, "全库图谱")
               ),
               renderDirectionBar(),
               renderNewModuleForm(),
@@ -2240,6 +2256,7 @@ window.__ModuleLoader__.load({
         if (index === null) {
           return h("div", { className: "svp-body" }, h("div", { className: "svp-empty" }, h("span", { className: "svp-empty-title" }, "正在读取账本 …")));
         }
+        if (wholeGraph) return renderWholeGraph();
         if (graphGroup === "" && graphTopic === "") return renderTopicOverview();
         if (graphTopic === "") return renderGroupPage(graphGroup);
         if (graphTopic === "none") {
@@ -2250,6 +2267,191 @@ window.__ModuleLoader__.load({
         var node = index.fineNodes[graphTopic] || index.topicNodes[graphTopic];
         if (node === undefined) return renderGroupPage(graphGroup);
         return renderTopicGraph(node);
+      }
+
+      /** 全库图谱：宽类当团簇、细线围在周围、连接画成跨簇的线。 */
+      function renderWholeGraph() {
+        var W = 1000;
+        var H = 900;
+        var CX = 500;
+        var CY = 440;
+        var PALETTE = ["#3d6fd8", "#d8833d", "#4f9d6b", "#b0559b", "#c9a227", "#6b7fd8", "#d85f6b", "#3da3a8", "#8a6fd8", "#7f9d3d", "#d86f9e", "#5f8fd8"];
+        var groups = index.topicRows;
+        var pos = {};
+        var colorOf = {};
+        var groupCount = Math.max(1, groups.length);
+        for (var g = 0; g < groups.length; g += 1) {
+          var angle = -Math.PI / 2 + (g / groupCount) * Math.PI * 2;
+          colorOf[groups[g].id] = PALETTE[g % PALETTE.length];
+          pos[groups[g].id] = {
+            id: groups[g].id,
+            x: CX + Math.cos(angle) * 350,
+            y: CY + Math.sin(angle) * 300,
+            kind: "broad",
+            label: groups[g].name,
+            size: groups[g].total,
+            color: colorOf[groups[g].id],
+          };
+        }
+        var byGroup = {};
+        for (var f = 0; f < index.fineDefs.length; f += 1) {
+          var fine = index.fineDefs[f];
+          if (pos[fine.group] === undefined) continue;
+          if (byGroup[fine.group] === undefined) byGroup[fine.group] = [];
+          byGroup[fine.group].push(fine);
+        }
+        var spokes = [];
+        for (var gid in byGroup) {
+          if (!Object.prototype.hasOwnProperty.call(byGroup, gid)) continue;
+          var list = byGroup[gid];
+          var center = pos[gid];
+          for (var i = 0; i < list.length; i += 1) {
+            var a = -Math.PI / 2 + (i / list.length) * Math.PI * 2;
+            var dist = 48 + (i % 2) * 18;
+            var node = index.fineNodes[list[i].id];
+            pos[list[i].id] = {
+              id: list[i].id,
+              x: center.x + Math.cos(a) * dist,
+              y: center.y + Math.sin(a) * dist,
+              kind: "fine",
+              label: list[i].name,
+              size: node === undefined ? 0 : node.hooksTotal,
+              color: colorOf[gid],
+            };
+            spokes.push({ x1: center.x, y1: center.y, x2: pos[list[i].id].x, y2: pos[list[i].id].y, color: colorOf[gid] });
+          }
+        }
+        var radiusOf = function (item) {
+          if (item.kind === "broad") return 13 + Math.min(14, Math.log2(1 + item.size) * 2.2);
+          return 3.5 + Math.min(8, Math.log2(1 + item.size) * 1.6);
+        };
+        var connected = {};
+        var edges = [];
+        for (var l = 0; l < index.links.length; l += 1) {
+          var edge = index.links[l];
+          var from = pos[edge.from];
+          var to = pos[edge.to];
+          if (from === undefined || to === undefined) continue;
+          edges.push({ from: edge.from, to: edge.to, weight: edge.weight, why: edge.why, a: from, b: to });
+        }
+        var highlight = hoverNode !== "" ? hoverNode : graphTopic;
+        for (var e = 0; e < edges.length; e += 1) {
+          if (edges[e].from === highlight) connected[edges[e].to] = true;
+          if (edges[e].to === highlight) connected[edges[e].from] = true;
+        }
+        var nodeList = Object.keys(pos).map(function (key) { return pos[key]; });
+        nodeList.sort(function (left, right) { return radiusOf(left) - radiusOf(right); });
+
+        var edgeEls = edges.map(function (item, index2) {
+          var active = highlight !== "" && (item.from === highlight || item.to === highlight);
+          return h("line", {
+            key: "e" + index2,
+            x1: item.a.x, y1: item.a.y, x2: item.b.x, y2: item.b.y,
+            stroke: active ? "var(--dsw-alias-brand-primary)" : "var(--dsw-alias-state-warn-primary)",
+            strokeWidth: active ? 2.2 : 1 + item.weight * 0.8,
+            opacity: highlight === "" ? 0.45 : (active ? 0.95 : 0.12),
+          }, h("title", null, item.why === "" ? item.from + " ↔ " + item.to : item.why));
+        });
+        var spokeEls = spokes.map(function (item, index2) {
+          return h("line", {
+            key: "s" + index2,
+            x1: item.x1, y1: item.y1, x2: item.x2, y2: item.y2,
+            stroke: item.color, strokeWidth: 1, opacity: 0.22,
+          });
+        });
+        var nodeEls = nodeList.map(function (item) {
+          var isBroad = item.kind === "broad";
+          var dim = highlight !== "" && item.id !== highlight && connected[item.id] !== true;
+          return h(
+            "g",
+            {
+              key: "n" + item.id,
+              className: "svp-whole-node",
+              "data-kind": item.kind,
+              "data-dim": dim ? "true" : "false",
+              onMouseEnter: function () { setHoverNode(item.id); },
+              onMouseLeave: function () { setHoverNode(""); },
+              onClick: function () {
+                setWholeGraph(false);
+                if (isBroad) openGroup(item.id);
+                else openFine(item.id);
+              },
+            },
+            h("circle", {
+              cx: item.x, cy: item.y,
+              r: radiusOf(item),
+              fill: item.color,
+              opacity: dim ? 0.25 : (isBroad ? 0.95 : 0.8),
+            }),
+            h("title", null, item.label + "（" + item.size + " 条）")
+          );
+        });
+        // 标签避让：大的优先保留，离已保留标签太近的就不画（悬停仍能看到名字）
+        var labelCandidates = nodeList
+          .filter(function (item) { return item.kind === "broad" || item.size >= 20; })
+          .sort(function (left, right) { return (right.kind === "broad" ? 1 : 0) - (left.kind === "broad" ? 1 : 0) || right.size - left.size; });
+        var labelRects = [];
+        var labelEls = [];
+        for (var lc = 0; lc < labelCandidates.length; lc += 1) {
+          var item = labelCandidates[lc];
+          var text = item.kind === "broad" ? item.label : item.label.slice(0, 10);
+          var labelY = item.y + radiusOf(item) + (item.kind === "broad" ? 15 : 11);
+          var boxW = text.length * 11 + 6;
+          var boxX = item.x - boxW / 2;
+          var boxY = labelY - 11;
+          if (boxX < 6 || boxX + boxW > W - 6) continue;
+          var overlaps = false;
+          for (var kc = 0; kc < labelRects.length; kc += 1) {
+            var r = labelRects[kc];
+            if (boxX < r.x + r.w + 6 && boxX + boxW + 6 > r.x && boxY < r.y + r.h + 4 && boxY + 18 + 4 > r.y) {
+              overlaps = true;
+              break;
+            }
+          }
+          if (overlaps) continue;
+          labelRects.push({ x: boxX, y: boxY, w: boxW, h: 18 });
+          var isBroad = item.kind === "broad";
+          labelEls.push(h("text", {
+            key: "t" + item.id,
+            x: item.x,
+            y: labelY,
+            "text-anchor": "middle",
+            className: isBroad ? "svp-whole-label-broad" : "svp-whole-label",
+            fill: isBroad ? "var(--dsw-alias-label-primary)" : item.color,
+            opacity: highlight !== "" && item.id !== highlight && connected[item.id] !== true ? 0.25 : 1,
+          }, text));
+        }
+
+        return h(
+          "div",
+          { className: "svp-view" },
+          h(
+            "div",
+            { className: "svp-body" },
+            h(
+              "div",
+              { className: "svp-column" },
+              h(
+                "div",
+                { className: "svp-crumb" },
+                h("button", { type: "button", onClick: function () { setWholeGraph(false); openOverview(); } }, "← 全部主题"),
+                h("span", null, "/"),
+                h("span", null, "全库图谱")
+              ),
+              h("div", { className: "svp-note" },
+                nodeList.length + " 个节点（12 宽类 + " + index.fineDefs.length + " 细线）· " + edges.length +
+                " 条连接 · 点大圆进宽类、点小圆进细线；悬停看它连到谁"),
+              h(
+                "svg",
+                { className: "svp-graph", viewBox: "0 0 " + W + " " + H, role: "img" },
+                h("g", null, spokeEls),
+                h("g", null, edgeEls),
+                h("g", null, nodeEls),
+                h("g", null, labelEls)
+              )
+            )
+          )
+        );
       }
 
       /** 中间层：一个宽类下面的细线清单。 */
