@@ -98,4 +98,27 @@ res = fakeRes()
 await routes.get('/session-view/api/memory/topic-new')(fakeReq('POST', { group: 'g99', name: 'x' }), res)
 assert.equal(res.status, 400, '宽类不存在要拒绝')
 
-console.log('route-test: pin 读写清除 + topic-new 追加/挂载/备份/校验 全部通过')
+// 5. topic-link：手工连一条边，再断开
+const linksFile = join(dir, 'links.jsonl')
+res = fakeRes()
+await routes.get('/session-view/api/memory/topic-link')(fakeReq('POST', { from: 'g01', to: 'i01', why: '手工测试' }), res)
+assert.equal(JSON.parse(res.body).ok, true)
+let edges = readFileSync(linksFile, 'utf8').split('\n').filter(Boolean).map((line) => JSON.parse(line))
+assert.equal(edges.length, 1, '连上后有一条边')
+assert.equal(edges[0].source, 'manual')
+assert.equal(edges[0].weight, 1)
+
+res = fakeRes()
+await routes.get('/session-view/api/memory/topic-link')(fakeReq('POST', { from: 'i01', to: 'g01', remove: true }), res)
+edges = readFileSync(linksFile, 'utf8').split('\n').filter(Boolean).map((line) => JSON.parse(line))
+assert.equal(edges.length, 0, '反向参数也能断开（按无序对匹配）')
+
+res = fakeRes()
+await routes.get('/session-view/api/memory/topic-link')(fakeReq('POST', { from: 'g99', to: 'i01' }), res)
+assert.equal(res.status, 400, '节点不存在要拒绝')
+
+res = fakeRes()
+await routes.get('/session-view/api/memory/topic-link')(fakeReq('POST', { from: 'g01', to: 'g01' }), res)
+assert.equal(res.status, 400, '不能自己连自己')
+
+console.log('route-test: pin 读写清除 + topic-new 追加/挂载/备份 + topic-link 连/断/校验 全部通过')

@@ -31,6 +31,7 @@ window.__ModuleLoader__.load({
     var MEMORY_TRANSCRIPT = "/work-memory/api/open";
     var MEMORY_PIN = "/session-view/api/memory/pin";
     var MEMORY_TOPIC_NEW = "/session-view/api/memory/topic-new";
+    var MEMORY_TOPIC_LINK = "/session-view/api/memory/topic-link";
 
     var EMPTY_SESSIONS = { ids: [], byId: {}, phase: "pending", projectionsBySession: {} };
     var EMPTY_WORKSPACES = { items: [], archivedSessionIds: [], pinnedSessionIds: [] };
@@ -157,6 +158,8 @@ window.__ModuleLoader__.load({
       ".svp-hookrow-seq{flex:none;font-size:11px;color:var(--dsw-alias-label-secondary);font-variant-numeric:tabular-nums;min-width:74px;}",
       ".svp-hookrow-title{flex:1 1 auto;min-width:0;font-size:12.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}",
       ".svp-hookrow-date{flex:none;font-size:11px;color:var(--dsw-alias-label-secondary);}",
+      ".svp-hookrow-tags{flex:none;display:inline-flex;gap:4px;}",
+      ".svp-tag{font-size:10.5px;padding:0 6px;border-radius:999px;border:1px solid var(--dsw-alias-border-l2);color:var(--dsw-alias-label-secondary);white-space:nowrap;}",
       ".svp-hookbody{padding:4px 8px 8px 91px;display:flex;flex-direction:column;gap:4px;}",
       ".svp-hook-ask{font-size:12.5px;color:var(--dsw-alias-label-secondary);white-space:pre-wrap;}",
       ".svp-artifact-path{font-size:11.5px;color:var(--dsw-alias-label-secondary);word-break:break-all;}",
@@ -211,6 +214,12 @@ window.__ModuleLoader__.load({
       ".svp-select{height:26px;padding:0 6px;border-radius:7px;border:1px solid var(--dsw-alias-border-l1);background:var(--dsw-alias-bg-base);color:inherit;font:inherit;font-size:12px;max-width:260px;}",
       ".svp-newmodule{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:8px 10px;margin-bottom:10px;border:1px dashed var(--dsw-alias-border-l2);border-radius:10px;}",
       ".svp-btn-quiet{background:transparent;border-color:var(--dsw-alias-border-l1);color:var(--dsw-alias-label-secondary);}",
+      ".svp-links{display:flex;align-items:center;gap:6px;flex-wrap:wrap;padding:6px 2px 2px;}",
+      ".svp-links-title{font-size:11.5px;color:var(--dsw-alias-label-secondary);}",
+      ".svp-link{font-size:11.5px;padding:2px 8px;border-radius:999px;border:1px solid var(--dsw-alias-border-l2);background:var(--dsw-alias-bg-layer-1);color:var(--dsw-alias-label-primary);cursor:pointer;}",
+      ".svp-link-wrap{display:inline-flex;align-items:center;gap:2px;}",
+      ".svp-link-x{border:none;background:transparent;color:var(--dsw-alias-label-secondary);cursor:pointer;font-size:11px;padding:0 2px;}",
+      ".svp-links-empty{font-size:11.5px;color:var(--dsw-alias-label-secondary);}",
       ".svp-file-count{flex:none;font-size:11px;color:var(--dsw-alias-label-secondary);}",
       "@media (max-width:820px){.svp-search{width:180px;max-width:40vw;}.svp-group-path{display:none;}}",
     ].join("");
@@ -737,6 +746,17 @@ window.__ModuleLoader__.load({
         fineByGroup[fg].sort(function (left, right) { return right.hooks - left.hooks; });
       }
 
+      // 横向连接：主题树之外的边（细类↔细类、细类↔宽类、宽类↔宽类）
+      var linkRows = Array.isArray(snapshot.links) ? snapshot.links : [];
+      var linksByNode = {};
+      for (var lk = 0; lk < linkRows.length; lk += 1) {
+        var edge = linkRows[lk];
+        if (linksByNode[edge.from] === undefined) linksByNode[edge.from] = [];
+        if (linksByNode[edge.to] === undefined) linksByNode[edge.to] = [];
+        linksByNode[edge.from].push({ node: edge.to, why: edge.why, weight: edge.weight });
+        linksByNode[edge.to].push({ node: edge.from, why: edge.why, weight: edge.weight });
+      }
+
       return {
         hooks: hooks,
         source: snapshot.source || null,
@@ -744,6 +764,8 @@ window.__ModuleLoader__.load({
         topicDefs: topicDefs,
         topicById: topicById,
         topicRows: topicRows,
+        links: linkRows,
+        linksByNode: linksByNode,
         fineDefs: fineDefs,
         fineById: fineById,
         fineNodes: fineNodes,
@@ -840,6 +862,9 @@ window.__ModuleLoader__.load({
       var newAnnState = React.useState("");
       var newAnn = newAnnState[0];
       var setNewAnn = newAnnState[1];
+      var linkTargetState = React.useState("");
+      var linkTarget = linkTargetState[0];
+      var setLinkTarget = linkTargetState[1];
       var topicState = React.useState("");
       var graphTopic = topicState[0];
       var setGraphTopic = topicState[1];
@@ -1004,6 +1029,21 @@ window.__ModuleLoader__.load({
         postJson(MEMORY_PIN, { clear: true })
           .then(function () { setPin(null); })
           .catch(function (error) { console.warn("[session-view] 清除记忆方向失败", error); });
+      }
+
+      /** 手工连一条边（写 links.jsonl，source = manual）。 */
+      function connectLink(fromId) {
+        if (linkTarget === "") return;
+        postJson(MEMORY_TOPIC_LINK, { from: fromId, to: linkTarget, why: "手工连接" })
+          .then(function () { setLinkTarget(""); loadMemory(); })
+          .catch(function (error) { console.warn("[session-view] 连接失败", error); });
+      }
+
+      /** 断开一条边。 */
+      function removeLink(fromId, toId) {
+        postJson(MEMORY_TOPIC_LINK, { from: fromId, to: toId, remove: true })
+          .then(function () { loadMemory(); })
+          .catch(function (error) { console.warn("[session-view] 断开失败", error); });
       }
 
       /** 在选中的宽类下新开一个模块（细类）。 */
@@ -1328,6 +1368,89 @@ window.__ModuleLoader__.load({
                 title: agentLabel(agentId) + " " + count + " 条",
               });
             })
+          )
+        );
+      }
+
+      /** 节点名：细类 → 宽类 → 原 id。 */
+      function nodeLabel(nodeId) {
+        if (index !== null) {
+          if (index.fineById[nodeId] !== undefined) return index.fineById[nodeId].name;
+          if (index.topicById[nodeId] !== undefined) return index.topicById[nodeId].name;
+        }
+        return nodeId;
+      }
+
+      /** 相关主题：横向连接，点一下跳过去（细类进星图，宽类进细线清单）；× 断开，+ 手工连。 */
+      function renderLinks(nodeId) {
+        var edges = index === null ? [] : (index.linksByNode[nodeId] || []);
+        var sorted = edges.slice().sort(function (left, right) { return right.weight - left.weight; }).slice(0, 8);
+        var options = [];
+        if (index !== null) {
+          for (var t = 0; t < index.topicRows.length; t += 1) {
+            if (index.topicRows[t].id !== nodeId) options.push({ id: index.topicRows[t].id, label: "⇒ " + index.topicRows[t].name });
+          }
+          for (var f = 0; f < index.fineDefs.length; f += 1) {
+            if (index.fineDefs[f].id !== nodeId) options.push({ id: index.fineDefs[f].id, label: "↳ " + index.fineDefs[f].name });
+          }
+        }
+        var chips = sorted.map(function (edge) {
+          var isFine = index.fineById[edge.node] !== undefined;
+          return h(
+            "span",
+            { key: "link-" + edge.node, className: "svp-link-wrap" },
+            h(
+              "button",
+              {
+                type: "button",
+                className: "svp-link",
+                title: edge.why === "" ? nodeLabel(edge.node) : edge.why,
+                onClick: function () {
+                  if (isFine) openFine(edge.node);
+                  else openGroup(edge.node);
+                },
+              },
+              (isFine ? "↳ " : "⇒ ") + nodeLabel(edge.node)
+            ),
+            h(
+              "button",
+              {
+                type: "button",
+                className: "svp-link-x",
+                title: "断开这条连接",
+                onClick: function () { removeLink(nodeId, edge.node); },
+              },
+              "×"
+            )
+          );
+        });
+        return h(
+          "div",
+          { className: "svp-links" },
+          h("span", { className: "svp-links-title" }, "相关"),
+          chips.length === 0 ? h("span", { className: "svp-links-empty" }, "（还没有连接）") : chips,
+          h(
+            "select",
+            {
+              className: "svp-select",
+              value: linkTarget,
+              "aria-label": "连到",
+              onChange: function (event) { setLinkTarget(event.target.value); },
+            },
+            h("option", { value: "" }, "连到 …"),
+            options.map(function (option) {
+              return h("option", { key: option.id, value: option.id }, option.label);
+            })
+          ),
+          h(
+            "button",
+            {
+              type: "button",
+              className: "svp-btn svp-btn-quiet",
+              disabled: linkTarget === "",
+              onClick: function () { connectLink(nodeId); },
+            },
+            "连接"
           )
         );
       }
@@ -1760,6 +1883,7 @@ window.__ModuleLoader__.load({
                 }),
                 h("span", null, "节点大小 = 钩子数")
               ),
+              renderLinks(node.id),
               (function () {
                 if (graphSession === TAIL_ID) return renderTailList(tail);
                 if (graphSession === "") return null;
@@ -1842,6 +1966,19 @@ window.__ModuleLoader__.load({
             },
             h("span", { className: "svp-hookrow-seq" }, "seq " + hook.startSeq + "–" + hook.endSeq),
             h("span", { className: "svp-hookrow-title", title: hook.title }, hook.title === "" ? "(无标题)" : hook.title),
+            (function () {
+              // 多标签：这条记录除了主主题还挂在哪些细类上
+              var extras = Array.isArray(hook.topics) ? hook.topics : [];
+              if (extras.length === 0) return null;
+              return h(
+                "span",
+                { className: "svp-hookrow-tags" },
+                extras.map(function (fineId) {
+                  var name = index !== null && index.fineById[fineId] !== undefined ? index.fineById[fineId].name : fineId;
+                  return h("span", { key: fineId, className: "svp-tag", title: name }, "+" + name.slice(0, 10));
+                })
+              );
+            })(),
             h("span", { className: "svp-hookrow-date" }, shortDate(hook.ts))
           ),
           body
@@ -2157,6 +2294,7 @@ window.__ModuleLoader__.load({
                 h("span", null, groupDef.name)
               ),
               h("div", { className: "svp-note" }, totalHooks + " 条钩子 · " + totalSessions + " 个会话 · " + fineRows.length + " 条细线（点一条看它的会话）"),
+              renderLinks(groupId),
               fineRows.length === 0
                 ? h("div", { className: "svp-empty" }, h("span", { className: "svp-empty-title" }, "这个宽类下还没有细线"))
                 : h("div", { style: { display: "flex", flexDirection: "column", gap: "2px" } }, list)

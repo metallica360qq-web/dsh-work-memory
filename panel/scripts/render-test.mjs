@@ -113,8 +113,12 @@ const snapshot = {
     { id: 'i04', name: '回测重跑与归因', desc: '', group: 'g04' },
     { id: 'i05', name: '因子研究', desc: '', group: 'g04' },
   ],
+  links: [
+    { from: 'i01', to: 'i03', kind: 'fine-fine', why: '插件宣传片走短视频流程', weight: 0.8 },
+    { from: 'g05', to: 'g08', kind: 'broad-broad', why: '开发产出要用宣传物料', weight: 0.6 },
+  ],
   hooks: [
-    { id: 'h1', session: 'session-a', agent: 'dsh', topic: 'g05', topicFine: 'i01', kind: 'auto', level: 'module', title: '做会话视图插件', ts: '2026-11-14T10:00:00.000Z', startSeq: 20, endSeq: 30, status: 'active', artifacts: ['D:\\工作文件夹\\session-view-plugin\\lib\\client.js'], ask: '帮我做一个会话视图插件' },
+    { id: 'h1', session: 'session-a', agent: 'dsh', topic: 'g05', topicFine: 'i01', topics: ['i03'], kind: 'auto', level: 'module', title: '做会话视图插件', ts: '2026-11-14T10:00:00.000Z', startSeq: 20, endSeq: 30, status: 'active', artifacts: ['D:\\工作文件夹\\session-view-plugin\\lib\\client.js'], ask: '帮我做一个会话视图插件' },
     { id: 'h5', session: 'session-a', agent: 'dsh', topic: 'g05', topicFine: 'i01', kind: 'auto', level: 'turn', title: '先做个雏形', ts: '2026-11-13T10:00:00.000Z', startSeq: 5, endSeq: 9, status: 'active', artifacts: [], ask: '先做个雏形' },
     { id: 'h6', session: 'zcode:abc', agent: 'zcode', topic: 'g05', topicFine: 'i02', kind: 'auto', level: 'module', title: 'zcode 里的插件笔记', ts: '2026-10-02T10:00:00.000Z', startSeq: 0, endSeq: 4, status: 'active', artifacts: [], ask: 'zcode 里聊过插件' },
     { id: 'h7', session: 'zcode:abc', agent: 'zcode', topic: 'g05', topicFine: 'i02', kind: 'auto', level: 'turn', title: 'zcode 里的第二轮', ts: '2026-10-03T10:00:00.000Z', startSeq: 5, endSeq: 8, status: 'active', artifacts: [], ask: '继续聊插件' },
@@ -265,6 +269,11 @@ assert.match(text(lines[0]), /会话视图插件开发/)
 assert.match(text(lines[0]), /2 条 · 1 个会话/)
 assert.match(text(lines[1]), /zcode 插件笔记/)
 
+// 2b. 横向连接：宽类页显示跨类别的边（g05 ⇒ g08）
+assert.match(body, /相关/)
+const groupLink = pick(tree, 'svp-link').find((link) => text(link).includes('PPT与宣传内容制作'))
+assert.ok(groupLink !== undefined, '宽类页有跨类别连接')
+
 // 3. 进细类：星图
 click(lines[0])
 tree = await settle()
@@ -279,6 +288,10 @@ body = text(tree)
 assert.match(body, /2 条钩子/)
 const rows = pick(tree, 'svp-hookrow')
 assert.equal(rows.length, 2)
+// 多标签：这条记录除了主主题还挂在 i03 上，行内应该有 + 标签
+const tags = pick(tree, 'svp-tag')
+assert.ok(tags.length >= 1, '多标签记录要显示 + 标签')
+assert.match(text(tags[0]), /\+抖音/)
 click(rows.find((row) => text(row).includes('seq 20–30')))
 tree = await settle()
 assert.match(text(tree), /完整提问：帮我做一个会话视图插件/)

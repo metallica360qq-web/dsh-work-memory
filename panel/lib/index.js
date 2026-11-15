@@ -30,6 +30,7 @@ const SNAPSHOT_PATH = '/session-view/api/memory/snapshot'
 const HOOK_PATH = '/session-view/api/memory/hook'
 const PIN_PATH = '/session-view/api/memory/pin'
 const TOPIC_NEW_PATH = '/session-view/api/memory/topic-new'
+const TOPIC_LINK_PATH = '/session-view/api/memory/topic-link'
 const TITLE_MAX = 90
 const ASK_PREVIEW_MAX = 120
 const TOPIC_KEYWORDS_MAX = 12
@@ -177,6 +178,7 @@ function trimHook(row) {
     topicFine: String(row.topicFine ?? ''),
     segment: String(row.segment ?? ''),
     segLabel: String(row.segLabel ?? ''),
+    topics: Array.isArray(row.topics) ? row.topics.slice(0, 6).map(String) : [],
     kind: String(row.kind ?? ''),
     level: String(row.level ?? 'turn'),
     title: String(row.title ?? '').slice(0, TITLE_MAX),
@@ -232,6 +234,37 @@ async function readTopics() {
 }
 
 /**
+ * 读连接表（links.jsonl）：主题树之外的横向关系。
+ * @returns {Promise<Array<{from: string, to: string, kind: string, why: string, weight: number}>>} 边列表。
+ */
+async function readLinks() {
+  let raw
+  try {
+    raw = await readFile(join(dataDir(), 'links.jsonl'), 'utf8')
+  } catch {
+    return []
+  }
+  const out = []
+  for (const line of raw.split('\n')) {
+    if (line.trim() === '') continue
+    try {
+      const row = JSON.parse(line)
+      if (typeof row.from !== 'string' || typeof row.to !== 'string') continue
+      out.push({
+        from: row.from,
+        to: row.to,
+        kind: String(row.kind || 'fine-fine'),
+        why: String(row.why || '').slice(0, 80),
+        weight: Number.isFinite(Number(row.weight)) ? Number(row.weight) : 0.5,
+      })
+    } catch {
+      /* 坏行跳过 */
+    }
+  }
+  return out
+}
+
+/**
  * 挂载两条只读路由。
  * @param {object} ctx Cordis 上下文（已注入 webServer）。
  * @returns {void}
@@ -248,7 +281,7 @@ export function apply(ctx) {
    */
   const snapshot = async (req, res) => {
     try {
-      const [ledger, topicTable] = await Promise.all([readLedger(), readTopics()])
+      const [ledger, topicTable, links] = await Promise.all([readLedger(), readTopics(), readLinks()])
       const meta = paths()
       sendJson(res, 200, {
         ok: true,
@@ -263,6 +296,7 @@ export function apply(ctx) {
         },
         topics: topicTable.topics,
         fine: topicTable.fine,
+        links,
         hooks: ledger.rows.map(trimHook),
       })
     } catch (error) {
@@ -413,7 +447,71 @@ export function apply(ctx) {
   }
 
   ctx.effect(() => webServer.register({ kind: 'exact', path: SNAPSHOT_PATH, handler: snapshot }), 'session-view: memory snapshot route')
+  /**
+   * 手工连/断两个主题：写 links.jsonl（source = manual）。
+   * POST {from, to, why} 或 {from, to, remove: true}。
+   * @param {import('node:http').IncomingMessage} req 请求。
+   * @param {import('node:http').ServerResponse} res 响应。
+   * @returns {Promise<void>} 写完响应。
+   */
+  const topicLink = async (req, res) => {
+    try {
+      if ((req.method ?? 'GET') !== 'POST') {
+        sendJson(res, 405, { ok: false, error: '只支持 POST' })
+        return
+      }
+      const body = await readBody(req)
+      const from = String(body.from ?? '').trim()
+      const to = String(body.to ?? '').trim()
+      if (from === '' || to === '' || from === to) {
+        sendJson(res, 400, { ok: false, error: '需要两个不同的节点 id' })
+        return
+      }
+      const table = await readJsonFile(join(dataDir(), 'topics.json'), null)
+      const ids = new Set()
+      for (const group of table !== null && Array.isArray(table.topics) ? table.topics : []) ids.add(String(group.id))
+      for (const fine of table !== null && Array.isArray(table.fine) ? table.fine : []) ids.add(String(fine.id))
+      if (!ids.has(from) || !ids.has(to)) {
+        sendJson(res, 400, { ok: false, error: '节点不存在' })
+        return
+      }
+      const file = join(dataDir(), 'links.jsonl')
+      let rows = []
+      try {
+        rows = (await readFile(file, 'utf8')).split('\n').filter(Boolean).map((line) => JSON.parse(line))
+      } catch {
+        rows = []
+      }
+      const samePair = (row) => (row.from === from && row.to === to) || (row.from === to && row.to === from)
+      if (body.remove === true) {
+        rows = rows.filter((row) => !samePair(row))
+      } else {
+        rows = rows.filter((row) => !samePair(row))
+        rows.push({
+          from,
+          to,
+          kind: 'fine-fine',
+          why: String(body.why ?? '').trim().slice(0, 80) || '手工连接',
+          weight: 1,
+          source: 'manual',
+          ts: new Date().toISOString(),
+        })
+      }
+      const stamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19)
+      try {
+        await copyFile(file, file + '.bak-link-' + stamp)
+      } catch {
+        /* 首次没有文件 */
+      }
+      await writeFile(file, rows.map((row) => JSON.stringify(row)).join('\n') + (rows.length > 0 ? '\n' : ''), 'utf8')
+      sendJson(res, 200, { ok: true, count: rows.length, remove: body.remove === true })
+    } catch (error) {
+      sendJson(res, 500, { ok: false, error: String(error && error.message ? error.message : error) })
+    }
+  }
+
   ctx.effect(() => webServer.register({ kind: 'exact', path: PIN_PATH, handler: pin }), 'session-view: memory pin route')
   ctx.effect(() => webServer.register({ kind: 'exact', path: TOPIC_NEW_PATH, handler: topicNew }), 'session-view: new topic route')
+  ctx.effect(() => webServer.register({ kind: 'exact', path: TOPIC_LINK_PATH, handler: topicLink }), 'session-view: topic link route')
   ctx.effect(() => webServer.register({ kind: 'exact', path: HOOK_PATH, handler: hook }), 'session-view: memory hook route')
 }
