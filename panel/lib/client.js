@@ -550,6 +550,25 @@ window.__ModuleLoader__.load({
       return origin.indexOf(":unknown") !== -1;
     }
 
+    /** 工作根目录（产物按它上卷到项目）。 */
+    var WORKSPACE_ROOT = "D:\\Program Files\\工作文件夹";
+
+    /**
+     * 产物路径 → 项目名：工作文件夹下的第一层目录；不在工作区的归到外部。
+     * @param {string} path 产物路径。
+     * @returns {string} 项目名。
+     */
+    function projectOf(path) {
+      var lower = String(path).toLowerCase();
+      var root = WORKSPACE_ROOT.toLowerCase();
+      if (lower.indexOf(root) === 0) {
+        var rest = String(path).slice(WORKSPACE_ROOT.length).replace(/^[\\/]+/, "");
+        var first = rest.split(/[\\/]/)[0];
+        return first === "" || first === undefined ? "(工作文件夹根)" : first;
+      }
+      return "(工作区外)";
+    }
+
     function buildMemoryIndex(snapshot, options) {
       if (snapshot === null || snapshot === undefined || snapshot.ok !== true) return null;
       var includeAgents = options !== undefined && options !== null && options.includeAgents === true;
@@ -648,7 +667,7 @@ window.__ModuleLoader__.load({
       for (var artifact in pathHooks) {
         if (!Object.prototype.hasOwnProperty.call(pathHooks, artifact)) continue;
         var dir = dirName(artifact);
-        if (dirs[dir] === undefined) dirs[dir] = { dir: dir, count: 0, files: [] };
+        if (dirs[dir] === undefined) dirs[dir] = { dir: dir, project: projectOf(dir), count: 0, files: [] };
         dirs[dir].count += pathHooks[artifact].length;
         dirs[dir].files.push({ path: artifact, count: pathHooks[artifact].length });
       }
@@ -2572,30 +2591,59 @@ window.__ModuleLoader__.load({
               h(
                 "div",
                 { className: "svp-note" },
-                index.stats.artifactPaths + " 个产物路径，来自 " + index.stats.withArtifacts + " 条钩子；点文件跳到图谱里对应的主题与会话。"
+                index.stats.artifactPaths + " 个产物路径，来自 " + index.stats.withArtifacts + " 条钩子；按项目分组，点文件跳到图谱里对应的主题与会话。"
               ),
               shown.length === 0
                 ? h("div", { className: "svp-empty" }, h("span", { className: "svp-empty-title" }, "没有匹配的产物"))
-                : shown.map(function (entry) {
-                  return h(
-                    "div",
-                    { key: entry.dir, className: "svp-dir" },
-                    h(
-                      "div",
-                      { className: "svp-dir-head" },
-                      h("span", { className: "svp-dir-path", title: entry.dir }, entry.dir),
-                      h("span", { className: "svp-file-count" }, entry.files.length + " 个文件")
-                    ),
-                    entry.files.map(function (file) {
-                      return h(
-                        "button",
-                        { key: file.path, type: "button", className: "svp-file", title: file.path, onClick: function () { openArtifactFile(file.path); } },
-                        h("span", { className: "svp-file-name" }, baseName(file.path)),
-                        h("span", { className: "svp-file-count" }, file.count + " 次")
+                : (function () {
+                  // 先把目录按项目上卷，再渲染：项目头 → 目录 → 文件
+                  var groups = [];
+                  var byProject = {};
+                  for (var si = 0; si < shown.length; si += 1) {
+                    var entry = shown[si];
+                    var key = entry.project || projectOf(entry.dir);
+                    if (byProject[key] === undefined) {
+                      byProject[key] = { project: key, dirs: [], files: 0 };
+                      groups.push(byProject[key]);
+                    }
+                    byProject[key].dirs.push(entry);
+                    byProject[key].files += entry.count;
+                  }
+                  groups.sort(function (left, right) { return right.files - left.files; });
+                  var out = [];
+                  for (var gi = 0; gi < groups.length; gi += 1) {
+                    var group = groups[gi];
+                    out.push(
+                      h("div", { key: "p-" + group.project, className: "svp-project" },
+                        group.project + " · " + group.dirs.length + " 个目录 · " + group.files + " 次写入")
+                    );
+                    for (var di = 0; di < group.dirs.length; di += 1) {
+                      var dirEntry = group.dirs[di];
+                      var rel = dirEntry.dir.replace(WORKSPACE_ROOT + "\\" + group.project, "") || "\\";
+                      out.push(
+                        h(
+                          "div",
+                          { key: dirEntry.dir, className: "svp-dir" },
+                          h(
+                            "div",
+                            { className: "svp-dir-head" },
+                            h("span", { className: "svp-dir-path", title: dirEntry.dir }, rel),
+                            h("span", { className: "svp-file-count" }, dirEntry.files.length + " 个文件")
+                          ),
+                          dirEntry.files.map(function (file) {
+                            return h(
+                              "button",
+                              { key: file.path, type: "button", className: "svp-file", title: file.path, onClick: function () { openArtifactFile(file.path); } },
+                              h("span", { className: "svp-file-name" }, baseName(file.path)),
+                              h("span", { className: "svp-file-count" }, file.count + " 次")
+                            );
+                          })
+                        )
                       );
-                    })
-                  );
-                })
+                    }
+                  }
+                  return out;
+                })()
             )
           )
         );
